@@ -64,14 +64,14 @@ async function indexBlock(block) {
             try {
               const result = parseEncryptedDescriptor(text);
               // Cache xfp pairs in the database
-              for (const xfpPairHash of result.xfpPairHashes) {
-                const txids = db.data.xfpPairs[xfpPairHash];
+              for (const xfpPairFingerprint of result.xfpPairFingerprints) {
+                const txids = db.data.xfpPairs[xfpPairFingerprint];
                 if (txids && !txids.includes(rawTx.txid)) {
-                  db.data.xfpPairs[xfpPairHash].push(rawTx.txid);
+                  db.data.xfpPairs[xfpPairFingerprint].push(rawTx.txid);
                 } else {
-                  db.data.xfpPairs[xfpPairHash] = [rawTx.txid];
+                  db.data.xfpPairs[xfpPairFingerprint] = [rawTx.txid];
                 }
-                console.log(`Cached xfpPairHash ${xfpPairHash}, txid: ${rawTx.txid}`);
+                console.log(`Cached xfpPairFingerprint ${xfpPairFingerprint}, txid: ${rawTx.txid}`);
               }
             } catch (error) {
               // No need to do anything. We can't parse an encrypted descriptor from the text
@@ -124,11 +124,11 @@ async function fetchBlocks() {
   }
 }
 
-// API to fetch cached xfpPairHash
-app.get('/xfpPairHash/:hash', async (req, res) => {
-  const { hash } = req.params;
-  const txids = db.data.xfpPairs[hash] ?? [];
-  res.json({ hash, txids });
+// API to fetch cached xfpPairFingerprint
+app.get('/txids/:xfpPairFingerprint', async (req, res) => {
+  const { xfpPairFingerprint } = req.params;
+  const txids = db.data.xfpPairs[xfpPairFingerprint] ?? [];
+  res.json({ xfpPairFingerprint, txids });
 });
 
 // API to fetch cached height

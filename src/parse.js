@@ -96,11 +96,11 @@ export default function parseEncryptedDescriptor(encryptedText) {
     throw new Error('Invalid encrypted text - too many xfps');
   }
 
-  // 4 byte xfp pair hashes
-  const xfpPairHashes = [];
+  // 4 byte xfp pair fingerprints
+  const xfpPairFingerprints = [];
   let maxNumXfpPairs = totalXfps * (totalXfps - 1) / 2;
   while (i + 4 <= encodedData.length && maxNumXfpPairs--) {
-    xfpPairHashes.push(hex.encode(encodedData.slice(i, i + 4)));
+    xfpPairFingerprints.push(hex.encode(encodedData.slice(i, i + 4)));
     i += 4;
   }
 
@@ -113,7 +113,7 @@ export default function parseEncryptedDescriptor(encryptedText) {
     strippedDescriptor,
     groupedEncryptedShares,
     encryptedData,
-    xfpPairHashes,
+    xfpPairFingerprints,
     totalXfps,
     totalXpubs,
     bip32Paths
