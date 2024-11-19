@@ -14,6 +14,7 @@
     "@caravan/bitcoin": "^0.3.1",
     "@scure/base": "^1.1.9",
     "@scure/btc-signer": "^1.4.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "lowdb": "^7.0.1",

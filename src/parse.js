@@ -91,8 +91,8 @@ export default function parseEncryptedDescriptor(encryptedText) {
   const encryptedData = encodedData.slice(i, i + encryptedBytes);
   i += encryptedBytes;
 
-  // More than 16 keys not allowed
-  if (totalXfps > 16) {
+  // More than 20 keys not allowed
+  if (totalXfps > 20) {
     throw new Error('Invalid encrypted text - too many xfps');
   }
 

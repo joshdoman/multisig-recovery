@@ -7,7 +7,7 @@ they can be quickly found using any pair of master fingerprints.
 The server connects to a `BITCOIN_NODE` and downloads each block beginning with `START_HEIGHT`. Each block is scanned for inscriptions that 
 represent an encrypted multisig descriptor, following the format in [multisig-backup](https://github.com/joshdoman/multisig-backup). 
 This descriptor format includes the first four bytes of the SHA256 hash of each pair of master fingerprints (the `xfpPairFingerprint`). The
-server extracts each `xfpPairFingerprint` and builds an index mapping `xfpPairFingerprints` to txids. Users can then easily find all txids
+server extracts each `xfpPairFingerprint` and builds an index mapping `xfpPairFingerprints` to inscriptionIds. Users can then easily find all inscriptionIds
 linked to a pair of master fingerprints.
 
 ## Pre-requisites
@@ -44,7 +44,7 @@ npm start
 
   Cached Block Height Endpoint : http://localhost:3000/height
 
-  Cached Txids Endpoint : http://localhost:3000/txids/:xfpPairFingerprint
+  Cached Inscription Ids Endpoint : http://localhost:3000/inscriptionIds/:xfpPairFingerprint
 
 ## Troubleshooting
 

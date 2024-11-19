@@ -5,3 +5,4 @@
 Dockerfile
 fly.toml
 /data
+.DS_Store

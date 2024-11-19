@@ -3,31 +3,34 @@ import ordinals from 'micro-ordinals';
 import { Transaction } from '@scure/btc-signer';
 import { hex, utf8 } from '@scure/base';
 import { JSONFilePreset } from 'lowdb/node';
+import cors from 'cors';
 import fs from 'fs';
 import 'dotenv/config';
 
 import parseEncryptedDescriptor from './parse.js';
 
-const app = express();
 const PORT = process.env.PORT || 3000;
 const START_HEIGHT = process.env.START_HEIGHT || 870525;
 const BITCOIN_NODE = process.env.BITCOIN_NODE || 'http://localhost:8332';
-const dataPath = process.env.DATA_DIR || './data';
-const baseUrl = `${BITCOIN_NODE}/rest`;
+const DATA_PATH = process.env.DATA_DIR || './data';
+const BASE_URL = `${BITCOIN_NODE}/rest`;
+
+const app = express();
+app.use(cors());
 
 // Create data folder if it doesn't exist
-if (!fs.existsSync(dataPath)) {
-  fs.mkdirSync(dataPath);
+if (!fs.existsSync(DATA_PATH)) {
+  fs.mkdirSync(DATA_PATH);
 }
 
 // Initialize LowDB
 const defaultData = { xfpPairs: {}, lastHeight: START_HEIGHT, lastBlockHash: '' };
-const db = await JSONFilePreset(dataPath + '/db.json', defaultData);
+const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
 
 async function getBlockByBlockHash(blockHash) {
   try {
       // Get the block hash by height
-      const response = await fetch(`${baseUrl}/block/${blockHash}.json`);
+      const response = await fetch(`${BASE_URL}/block/${blockHash}.json`);
       return await response.json();
   } catch (error) {
       console.error(`Error fetching block at block hash ${blockHash}:`, error);
@@ -38,7 +41,7 @@ async function getBlockByBlockHash(blockHash) {
 async function getBlockHashByHeight(height) {
     try {
         // Get the block hash by height
-        const getBlockHash = await fetch(`${baseUrl}/blockhashbyheight/${height}.json`);
+        const getBlockHash = await fetch(`${BASE_URL}/blockhashbyheight/${height}.json`);
         const blockHashJson = await getBlockHash.json();
         return blockHashJson.blockhash;
     } catch (error) {
@@ -57,21 +60,22 @@ async function indexBlock(block) {
       for (const input of tx.inputs) {
         try {
           const inscriptions = ordinals.parseWitness(input.finalScriptWitness);
-          for (const inscription of inscriptions) {
+          for (const [i, inscription] of inscriptions.entries()) {
             if (!inscription.tags.contentType?.startsWith('text/plain')) continue;
+            const inscriptionId = `${rawTx.txid}i${i}`;
             const text = utf8.encode(inscription.body);
-            if (text.length < 200) continue;
+            if (text.length < 100) continue;
             try {
               const result = parseEncryptedDescriptor(text);
               // Cache xfp pairs in the database
               for (const xfpPairFingerprint of result.xfpPairFingerprints) {
-                const txids = db.data.xfpPairs[xfpPairFingerprint];
-                if (txids && !txids.includes(rawTx.txid)) {
-                  db.data.xfpPairs[xfpPairFingerprint].push(rawTx.txid);
+                const inscriptionIds = db.data.xfpPairs[xfpPairFingerprint];
+                if (inscriptionIds && !inscriptionIds.includes(inscriptionId)) {
+                  db.data.xfpPairs[xfpPairFingerprint].push(inscriptionId);
                 } else {
-                  db.data.xfpPairs[xfpPairFingerprint] = [rawTx.txid];
+                  db.data.xfpPairs[xfpPairFingerprint] = [inscriptionId];
                 }
-                console.log(`Cached xfpPairFingerprint ${xfpPairFingerprint}, txid: ${rawTx.txid}`);
+                console.log(`Cached xfpPairFingerprint ${xfpPairFingerprint}, inscriptionID: ${inscriptionId}`);
               }
             } catch (error) {
               // No need to do anything. We can't parse an encrypted descriptor from the text
@@ -92,7 +96,7 @@ async function fetchBlocks() {
   while (true) {
     try {
       // Get the latest block height
-      const chainInfoResponse = await fetch(`${baseUrl}/chaininfo.json`);
+      const chainInfoResponse = await fetch(`${BASE_URL}/chaininfo.json`);
       const chainInfo = await chainInfoResponse.json();
       const latestHeight = chainInfo.blocks;
 
@@ -101,6 +105,7 @@ async function fetchBlocks() {
         const nextHeight = db.data.lastHeight + 1;
         const blockHash = await getBlockHashByHeight(nextHeight);
         const block = await getBlockByBlockHash(blockHash);
+        console.log(`Fetched block ${block.hash}`);
         await indexBlock(block);
         console.log(`Indexed block ${block.hash} at height:`, nextHeight);
 
@@ -124,11 +129,11 @@ async function fetchBlocks() {
   }
 }
 
-// API to fetch cached xfpPairFingerprint
-app.get('/txids/:xfpPairFingerprint', async (req, res) => {
+// API to fetch cached inscriptionIds indexed at `xfpPairFingerprint`
+app.get('/inscriptionIds/:xfpPairFingerprint', async (req, res) => {
   const { xfpPairFingerprint } = req.params;
-  const txids = db.data.xfpPairs[xfpPairFingerprint] ?? [];
-  res.json({ xfpPairFingerprint, txids });
+  const inscriptionIds = db.data.xfpPairs[xfpPairFingerprint] ?? [];
+  res.json({ xfpPairFingerprint, inscriptionIds });
 });
 
 // API to fetch cached height
