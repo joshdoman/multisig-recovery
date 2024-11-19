@@ -1,13 +1,9 @@
 import express from 'express';
-import ordinals from 'micro-ordinals';
-import { Transaction } from '@scure/btc-signer';
-import { hex, utf8 } from '@scure/base';
+import { Worker } from 'worker_threads';
 import { JSONFilePreset } from 'lowdb/node';
 import cors from 'cors';
 import fs from 'fs';
 import 'dotenv/config';
-
-import parseEncryptedDescriptor from './parse.js';
 
 const PORT = process.env.PORT || 3000;
 const START_HEIGHT = process.env.START_HEIGHT || 870525;
@@ -29,66 +25,50 @@ const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
 
 async function getBlockByBlockHash(blockHash) {
   try {
-      // Get the block hash by height
-      const response = await fetch(`${BASE_URL}/block/${blockHash}.json`);
-      return await response.json();
+    // Get the block hash by height
+    const response = await fetch(`${BASE_URL}/block/${blockHash}.json`);
+    return await response.json();
   } catch (error) {
-      console.error(`Error fetching block at block hash ${blockHash}:`, error);
-      throw error;
+    console.error(`Error fetching block at block hash ${blockHash}:`, error);
+    throw error;
   }
 }
 
 async function getBlockHashByHeight(height) {
     try {
-        // Get the block hash by height
-        const getBlockHash = await fetch(`${BASE_URL}/blockhashbyheight/${height}.json`);
-        const blockHashJson = await getBlockHash.json();
-        return blockHashJson.blockhash;
+      // Get the block hash by height
+      const getBlockHash = await fetch(`${BASE_URL}/blockhashbyheight/${height}.json`);
+      const blockHashJson = await getBlockHash.json();
+      return blockHashJson.blockhash;
     } catch (error) {
-        console.error(`Error fetching block hash at height ${height}:`, error);
-        throw error;
+      console.error(`Error fetching block hash at height ${height}:`, error);
+      throw error;
     }
 }
 
+function processBlockInWorker(block) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker('./src/worker.js', { workerData: block });
+    worker.on('message', resolve); // Worker sends processed data
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
+    });
+  });
+}
+
 async function indexBlock(block) {
-  for (const rawTx of block.tx) {
-    try {
-      const tx = Transaction.fromRaw(hex.decode(rawTx.hex), { 
-        allowUnknownOutputs: true,
-        disableScriptCheck: true,
-      });
-      for (const input of tx.inputs) {
-        try {
-          const inscriptions = ordinals.parseWitness(input.finalScriptWitness);
-          for (const [i, inscription] of inscriptions.entries()) {
-            if (!inscription.tags.contentType?.startsWith('text/plain')) continue;
-            const inscriptionId = `${rawTx.txid}i${i}`;
-            const text = utf8.encode(inscription.body);
-            if (text.length < 100) continue;
-            try {
-              const result = parseEncryptedDescriptor(text);
-              // Cache xfp pairs in the database
-              for (const xfpPairFingerprint of result.xfpPairFingerprints) {
-                const inscriptionIds = db.data.xfpPairs[xfpPairFingerprint];
-                if (inscriptionIds && !inscriptionIds.includes(inscriptionId)) {
-                  db.data.xfpPairs[xfpPairFingerprint].push(inscriptionId);
-                } else {
-                  db.data.xfpPairs[xfpPairFingerprint] = [inscriptionId];
-                }
-                console.log(`Cached xfpPairFingerprint ${xfpPairFingerprint}, inscriptionID: ${inscriptionId}`);
-              }
-            } catch (error) {
-              // No need to do anything. We can't parse an encrypted descriptor from the text
-            }
-          }
-        } catch {
-          // No need to do anything. We can't parse inscriptions from this witness
-        }
-      }
-    } catch (error) {
-      // Unable to parse transaction (typically due to bare multisig output)
-      console.error(`Error parsing transaction ${rawTx.txid}: ${error}`);
+  // Process block in worker so the main thread is not blocked
+  const processedData = await processBlockInWorker(block);
+  // Update database with results from the worker
+  for (const [xfpPairFingerprint, inscriptionIds] of Object.entries(processedData)) {
+    if (!db.data.xfpPairs[xfpPairFingerprint]) {
+      db.data.xfpPairs[xfpPairFingerprint] = [];
     }
+    db.data.xfpPairs[xfpPairFingerprint].push(...inscriptionIds.filter(id => 
+      !db.data.xfpPairs[xfpPairFingerprint].includes(id)
+    ));
+    console.log(`Cached xfpPairFingerprint ${xfpPairFingerprint}, inscriptionIds: ${inscriptionIds.join(',')}`);
   }
 }
 
