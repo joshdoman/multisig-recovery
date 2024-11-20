@@ -49,7 +49,10 @@ async function getBlockHashByHeight(height) {
 function processBlockInWorker(block) {
   return new Promise((resolve, reject) => {
     const worker = new Worker('./src/worker.js', { workerData: block });
-    worker.on('message', resolve); // Worker sends processed data
+    worker.on('message', (result) => {
+      resolve(result);
+      worker.terminate();
+    });
     worker.on('error', reject);
     worker.on('exit', (code) => {
       if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
