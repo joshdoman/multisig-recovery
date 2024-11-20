@@ -26,8 +26,8 @@ const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
 async function getBlockByBlockHash(blockHash) {
   try {
     // Get the block hash by height
-    const response = await fetch(`${BASE_URL}/block/${blockHash}.json`);
-    return await response.json();
+    const response = await fetch(`${BASE_URL}/block/${blockHash}.hex`);
+    return await response.text();
   } catch (error) {
     console.error(`Error fetching block at block hash ${blockHash}:`, error);
     throw error;
@@ -59,9 +59,9 @@ function processBlockInWorker(block) {
 
 async function indexBlock(block) {
   // Process block in worker so the main thread is not blocked
-  const processedData = await processBlockInWorker(block);
+  const { previousBlockhash, xfpPairs } = await processBlockInWorker(block);
   // Update database with results from the worker
-  for (const [xfpPairFingerprint, inscriptionIds] of Object.entries(processedData)) {
+  for (const [xfpPairFingerprint, inscriptionIds] of Object.entries(xfpPairs)) {
     if (!db.data.xfpPairs[xfpPairFingerprint]) {
       db.data.xfpPairs[xfpPairFingerprint] = [];
     }
@@ -70,6 +70,7 @@ async function indexBlock(block) {
     ));
     console.log(`Cached xfpPairFingerprint ${xfpPairFingerprint}, inscriptionIds: ${inscriptionIds.join(',')}`);
   }
+  return previousBlockhash;
 }
 
 async function fetchBlocks() {
@@ -85,11 +86,10 @@ async function fetchBlocks() {
         const nextHeight = db.data.lastHeight + 1;
         const blockHash = await getBlockHashByHeight(nextHeight);
         const block = await getBlockByBlockHash(blockHash);
-        console.log(`Fetched block ${block.hash}`);
-        await indexBlock(block);
-        console.log(`Indexed block ${block.hash} at height:`, nextHeight);
+        const previousBlockhash = await indexBlock(block);
+        console.log(`Indexed block ${blockHash} at height:`, nextHeight);
 
-        if (db.data.lastBlockHash && block.previousblockhash !== db.data.lastBlockHash) {
+        if (db.data.lastBlockHash && previousBlockhash !== db.data.lastBlockHash) {
           db.data.lastHeight -= 6;
           db.data.lastBlockHash = '';
           console.log("Reorg detected, re-indexing last 6 blocks...");
