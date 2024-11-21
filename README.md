@@ -42,9 +42,13 @@ npm start
 
 - API endpoints
 
-  Cached Block Height Endpoint : http://localhost:3000/height
+  Cached Block Height : http://localhost:3000/height
 
-  Cached Inscription Ids Endpoint : http://localhost:3000/inscriptionIds/:xfpPairFingerprint
+  Cached Inscription Count : http://localhost:3000/count
+
+  Cached Inscription Ids : http://localhost:3000/inscriptionIds
+
+  Cached Inscription Ids at `xfpPairFingerprint` : http://localhost:3000/inscriptionIds/:xfpPairFingerprint
 
 ## Troubleshooting
 

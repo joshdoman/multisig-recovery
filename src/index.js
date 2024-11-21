@@ -20,8 +20,16 @@ if (!fs.existsSync(DATA_PATH)) {
 }
 
 // Initialize LowDB
-const defaultData = { xfpPairs: {}, lastHeight: START_HEIGHT, lastBlockHash: '' };
+const defaultData = {
+  inscriptionIds: [],
+  xfpPairs: {},
+  lastHeight: START_HEIGHT, 
+  lastBlockHash: '',
+};
 const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
+
+// Initialize inscription set for quick lookup to avoid duplicates
+const inscriptionSet = new Set(db.data.inscriptionIds);
 
 async function getBlockByBlockHash(blockHash) {
   try {
@@ -62,8 +70,14 @@ function processBlockInWorker(block) {
 
 async function indexBlock(block) {
   // Process block in worker so the main thread is not blocked
-  const { previousBlockhash, xfpPairs } = await processBlockInWorker(block);
+  const { previousBlockhash, inscriptionIds, xfpPairs } = await processBlockInWorker(block);
   // Update database with results from the worker
+  inscriptionIds.forEach(inscriptionId => {
+    if (!inscriptionSet.has(inscriptionId)) {
+      inscriptionSet.add(inscriptionId);
+      db.data.inscriptionIds.push(inscriptionId);
+    }
+  });
   for (const [xfpPairFingerprint, inscriptionIds] of Object.entries(xfpPairs)) {
     if (!db.data.xfpPairs[xfpPairFingerprint]) {
       db.data.xfpPairs[xfpPairFingerprint] = [];
@@ -112,11 +126,23 @@ async function fetchBlocks() {
   }
 }
 
+// API to fetch list of cached inscriptionIds
+app.get('/inscriptionIds', async (_, res) => {
+  const inscriptionIds = db.data.inscriptionIds;
+  res.json({ inscriptionIds });
+});
+
 // API to fetch cached inscriptionIds indexed at `xfpPairFingerprint`
 app.get('/inscriptionIds/:xfpPairFingerprint', async (req, res) => {
   const { xfpPairFingerprint } = req.params;
   const inscriptionIds = db.data.xfpPairs[xfpPairFingerprint] ?? [];
   res.json({ xfpPairFingerprint, inscriptionIds });
+});
+
+// API to fetch number of cached inscriptionIds
+app.get('/count', async (_, res) => {
+  const count = db.data.inscriptionIds.length;
+  res.json({ count });
 });
 
 // API to fetch cached height

@@ -38,6 +38,7 @@ async function processBlock(rawHex) {
   const { value: txCount, size: txCountSize } = readVarInt(blockBytes, offset);
   offset += txCountSize;
 
+  const inscriptionIds = [];
   const xfpPairs = {};
 
   for (let i = 0; i < txCount; i++) {
@@ -66,6 +67,7 @@ async function processBlock(rawHex) {
                 }
                 xfpPairs[xfpPairFingerprint].push(inscriptionId);
               }
+              inscriptionIds.push(inscriptionId);
             } catch {
               // Skip parsing errors
             }
@@ -79,7 +81,7 @@ async function processBlock(rawHex) {
     }
   }
 
-  return { prevBlockhash, xfpPairs };
+  return { prevBlockhash, inscriptionIds, xfpPairs };
 
   function parseTransactionSize(bytes, offset) {
     const start = offset;
