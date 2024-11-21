@@ -7,6 +7,7 @@ import 'dotenv/config';
 
 const PORT = process.env.PORT || 3000;
 const START_HEIGHT = process.env.START_HEIGHT || 870525;
+const REINDEX_IF_REORG = process.env.REINDEX_IF_REORG || 6;
 const BITCOIN_NODE = process.env.BITCOIN_NODE || 'http://localhost:8332';
 const DATA_PATH = process.env.DATA_DIR || './data';
 const BASE_URL = `${BITCOIN_NODE}/rest`;
@@ -107,7 +108,7 @@ async function fetchBlocks() {
         console.log(`Indexed block ${blockHash} at height:`, nextHeight);
 
         if (db.data.lastBlockHash && previousBlockhash !== db.data.lastBlockHash) {
-          db.data.lastHeight -= 6;
+          db.data.lastHeight -= REINDEX_IF_REORG;
           db.data.lastBlockHash = '';
           console.log("Reorg detected, re-indexing last 6 blocks...");
         } else {

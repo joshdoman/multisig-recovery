@@ -21,6 +21,7 @@ This project uses the following environment variables:
 | ----------------------------- | ------------------------------------| -----------------------------------------------|
 |PORT           | Specifies the port number on which the server listens for incoming HTTP requests               | 3000      |
 |START_HEIGHT   | Specifies the block height at which indexing begins                                            | 870525      |
+|REINDEX_IF_REORG | Specifies the number of blocks to reindex when a reorg is detected  | 6 |
 |BITCOIN_NODE   | Specifies the URL of the attached Bitcoin node                                                 | http://localhost:8332 |
 |DATA_DIR       | Specifies the directory where the indexed data will be persisted                               | ./data |
 
