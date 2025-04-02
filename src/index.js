@@ -9,8 +9,9 @@ const PORT = process.env.PORT || 3000;
 const START_HEIGHT = process.env.START_HEIGHT || 870525;
 const REINDEX_IF_REORG = process.env.REINDEX_IF_REORG || 6;
 const BITCOIN_NODE = process.env.BITCOIN_NODE || 'http://localhost:8332';
+const TESTNET_NODE = process.env.TESTNET_NODE || undefined;
+const TESTNET_START_HEIGHT = process.env.TESTNET_START_HEIGHT || 75625;
 const DATA_PATH = process.env.DATA_DIR || './data';
-const BASE_URL = `${BITCOIN_NODE}/rest`;
 
 const app = express();
 app.use(cors());
@@ -32,10 +33,10 @@ const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
 // Initialize inscription set for quick lookup to avoid duplicates
 const inscriptionSet = new Set(db.data.inscriptionIds);
 
-async function getBlockByBlockHash(blockHash) {
+async function getBlockByBlockHash(baseUrl, blockHash) {
   try {
     // Get the block hash by height
-    const response = await fetch(`${BASE_URL}/block/${blockHash}.hex`);
+    const response = await fetch(`${baseUrl}/block/${blockHash}.hex`);
     return await response.text();
   } catch (error) {
     console.error(`Error fetching block at block hash ${blockHash}:`, error);
@@ -43,10 +44,10 @@ async function getBlockByBlockHash(blockHash) {
   }
 }
 
-async function getBlockHashByHeight(height) {
+async function getBlockHashByHeight(baseUrl, height) {
     try {
       // Get the block hash by height
-      const getBlockHash = await fetch(`${BASE_URL}/blockhashbyheight/${height}.json`);
+      const getBlockHash = await fetch(`${baseUrl}/blockhashbyheight/${height}.json`);
       const blockHashJson = await getBlockHash.json();
       return blockHashJson.blockhash;
     } catch (error) {
@@ -95,15 +96,16 @@ async function fetchBlocks() {
   while (true) {
     try {
       // Get the latest block height
-      const chainInfoResponse = await fetch(`${BASE_URL}/chaininfo.json`);
+      const baseUrl = `${BITCOIN_NODE}/rest`;
+      const chainInfoResponse = await fetch(`${baseUrl}/chaininfo.json`);
       const chainInfo = await chainInfoResponse.json();
       const latestHeight = chainInfo.blocks;
 
       // Fetch blocks up to the latest height
       while (db.data.lastHeight < latestHeight) {
         const nextHeight = db.data.lastHeight + 1;
-        const blockHash = await getBlockHashByHeight(nextHeight);
-        const block = await getBlockByBlockHash(blockHash);
+        const blockHash = await getBlockHashByHeight(baseUrl, nextHeight);
+        const block = await getBlockByBlockHash(baseUrl, blockHash);
         const previousBlockhash = await indexBlock(block);
         console.log(`Indexed block ${blockHash} at height:`, nextHeight);
 
@@ -116,6 +118,38 @@ async function fetchBlocks() {
           db.data.lastBlockHash = block.hash;
         }
         await db.write();
+      }
+
+      if (TESTNET_NODE) {
+        // Set the testnet start height
+        if (!db.data.lastTestnetHeight) {
+          db.data.lastTestnetHeight = TESTNET_START_HEIGHT;
+        }
+
+        // Get the latest block height
+        const testnetUrl = `${TESTNET_NODE}/rest`;
+        const chainInfoResponse = await fetch(`${testnetUrl}/chaininfo.json`);
+        const chainInfo = await chainInfoResponse.json();
+        const latestHeight = chainInfo.blocks;
+
+        // Fetch blocks up to the latest height
+        while (db.data.lastTestnetHeight < latestHeight) {
+          const nextHeight = db.data.lastTestnetHeight + 1;
+          const blockHash = await getBlockHashByHeight(testnetUrl, nextHeight);
+          const block = await getBlockByBlockHash(testnetUrl, blockHash);
+          const previousBlockhash = await indexBlock(block);
+          console.log(`Testnet: Indexed block ${blockHash} at height:`, nextHeight);
+
+          if (db.data.lastTestnetBlockHash && previousBlockhash !== db.data.lastTestnetBlockHash) {
+            db.data.lastTestnetHeight -= REINDEX_IF_REORG;
+            db.data.lastTestnetBlockHash = '';
+            console.log("Testnet: Reorg detected, re-indexing last 6 blocks...");
+          } else {
+            db.data.lastTestnetHeight = nextHeight;
+            db.data.lastTestnetBlockHash = block.hash;
+          }
+          await db.write();
+        }
       }
 
       // Wait before polling again
