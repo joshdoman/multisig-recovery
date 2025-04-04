@@ -30,8 +30,19 @@ const defaultData = {
 };
 const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
 
+// Set the testnet start height
+if (!db.data.lastTestnetHeight) {
+  db.data.lastTestnetHeight = TESTNET_START_HEIGHT;
+}
+
+// Set the testnet inscription id set
+if (!db.data.testnetInscriptionIds) {
+  db.data.testnetInscriptionIds = [];
+}
+
 // Initialize inscription set for quick lookup to avoid duplicates
 const inscriptionSet = new Set(db.data.inscriptionIds);
+const testnetInscriptionSet = new Set(db.data.testnetInscriptionIds);
 
 async function getBlockByBlockHash(baseUrl, blockHash) {
   try {
@@ -70,7 +81,7 @@ function processBlockInWorker(block) {
   });
 }
 
-async function indexBlock(block) {
+async function indexBlock(block, isTestnet) {
   // Process block in worker so the main thread is not blocked
   const { previousBlockhash, inscriptionIds, xfpPairs } = await processBlockInWorker(block);
   // Update database with results from the worker
@@ -78,6 +89,11 @@ async function indexBlock(block) {
     if (!inscriptionSet.has(inscriptionId)) {
       inscriptionSet.add(inscriptionId);
       db.data.inscriptionIds.push(inscriptionId);
+
+      if (isTestnet) {
+        testnetInscriptionSet.add(inscriptionId);
+        db.data.testnetInscriptionIds.push(inscriptionId);
+      }
     }
   });
   for (const [xfpPairFingerprint, inscriptionIds] of Object.entries(xfpPairs)) {
@@ -106,7 +122,7 @@ async function fetchBlocks() {
         const nextHeight = db.data.lastHeight + 1;
         const blockHash = await getBlockHashByHeight(baseUrl, nextHeight);
         const block = await getBlockByBlockHash(baseUrl, blockHash);
-        const previousBlockhash = await indexBlock(block);
+        const previousBlockhash = await indexBlock(block, false);
         console.log(`Indexed block ${blockHash} at height:`, nextHeight);
 
         if (db.data.lastBlockHash && previousBlockhash !== db.data.lastBlockHash) {
@@ -121,11 +137,6 @@ async function fetchBlocks() {
       }
 
       if (TESTNET_NODE) {
-        // Set the testnet start height
-        if (!db.data.lastTestnetHeight) {
-          db.data.lastTestnetHeight = TESTNET_START_HEIGHT;
-        }
-
         // Get the latest block height
         const testnetUrl = `${TESTNET_NODE}/rest`;
         const chainInfoResponse = await fetch(`${testnetUrl}/chaininfo.json`);
@@ -137,7 +148,7 @@ async function fetchBlocks() {
           const nextHeight = db.data.lastTestnetHeight + 1;
           const blockHash = await getBlockHashByHeight(testnetUrl, nextHeight);
           const block = await getBlockByBlockHash(testnetUrl, blockHash);
-          const previousBlockhash = await indexBlock(block);
+          const previousBlockhash = await indexBlock(block, true);
           console.log(`Testnet: Indexed block ${blockHash} at height:`, nextHeight);
 
           if (db.data.lastTestnetBlockHash && previousBlockhash !== db.data.lastTestnetBlockHash) {
