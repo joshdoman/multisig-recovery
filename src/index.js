@@ -113,7 +113,7 @@ async function fetchBlocks() {
           console.log("Reorg detected, re-indexing last 6 blocks...");
         } else {
           db.data.lastHeight = nextHeight;
-          db.data.lastBlockHash = block.hash;
+          db.data.lastBlockHash = blockHash;
         }
         await db.write();
       }
