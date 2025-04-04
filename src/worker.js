@@ -32,7 +32,7 @@ async function processBlock(rawHex) {
   const blockBytes = hexToBytes(rawHex);
 
   // Extract the prevBlockHash (bytes 4 to 36 in the header)
-  const prevBlockhash = bytesToHex(blockBytes.subarray(4, 36)).match(/.{2}/g).reverse().join('');
+  const previousBlockhash = bytesToHex(blockBytes.subarray(4, 36)).match(/.{2}/g).reverse().join('');
 
   let offset = 80; // Skip the block header
   const { value: txCount, size: txCountSize } = readVarInt(blockBytes, offset);
@@ -81,7 +81,7 @@ async function processBlock(rawHex) {
     }
   }
 
-  return { prevBlockhash, inscriptionIds, xfpPairs };
+  return { previousBlockhash, inscriptionIds, xfpPairs };
 
   function parseTransactionSize(bytes, offset) {
     const start = offset;

@@ -10,7 +10,7 @@ const START_HEIGHT = process.env.START_HEIGHT || 870525;
 const REINDEX_IF_REORG = process.env.REINDEX_IF_REORG || 6;
 const BITCOIN_NODE = process.env.BITCOIN_NODE || 'http://localhost:8332';
 const TESTNET_NODE = process.env.TESTNET_NODE || undefined;
-const TESTNET_START_HEIGHT = process.env.TESTNET_START_HEIGHT || 75625;
+const TESTNET_START_HEIGHT = process.env.TESTNET_START_HEIGHT || 75875;
 const DATA_PATH = process.env.DATA_DIR || './data';
 
 const app = express();
@@ -30,14 +30,10 @@ const defaultData = {
 };
 const db = await JSONFilePreset(DATA_PATH + '/db.json', defaultData);
 
-// Set the testnet start height
 if (!db.data.lastTestnetHeight) {
   db.data.lastTestnetHeight = TESTNET_START_HEIGHT;
-}
-
-// Set the testnet inscription id set
-if (!db.data.testnetInscriptionIds) {
   db.data.testnetInscriptionIds = [];
+  db.data.lastTestnetBlockHash = '';
 }
 
 // Initialize inscription set for quick lookup to avoid duplicates
@@ -131,7 +127,7 @@ async function fetchBlocks() {
           console.log("Reorg detected, re-indexing last 6 blocks...");
         } else {
           db.data.lastHeight = nextHeight;
-          db.data.lastBlockHash = block.hash;
+          db.data.lastBlockHash = blockHash;
         }
         await db.write();
       }
@@ -157,7 +153,7 @@ async function fetchBlocks() {
             console.log("Testnet: Reorg detected, re-indexing last 6 blocks...");
           } else {
             db.data.lastTestnetHeight = nextHeight;
-            db.data.lastTestnetBlockHash = block.hash;
+            db.data.lastTestnetBlockHash = blockHash;
           }
           await db.write();
         }
